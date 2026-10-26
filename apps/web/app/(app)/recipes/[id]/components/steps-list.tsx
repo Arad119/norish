@@ -1,5 +1,10 @@
 "use client";
 
+import { useRecipeLinkedRecipes } from "@/app/(app)/recipes/[id]/components/use-recipe-linked-recipes";
+import {
+  LinkedRecipeStepsSection,
+  linkedSectionsByStep,
+} from "@/components/recipes/linked-recipe-sections";
 import { ReadonlyStepsList } from "@/components/recipes/readonly-steps-list";
 
 import { useRecipeContext } from "../context";
@@ -11,6 +16,8 @@ export default function StepsList() {
     context?.adjustedIngredients && context.adjustedIngredients.length > 0
       ? context.adjustedIngredients
       : (recipe?.recipeIngredients ?? []);
+  const { tree, ingredientsFor } = useRecipeLinkedRecipes();
+  const linkedByStep = linkedSectionsByStep(tree?.steps ?? []);
 
   return (
     <ReadonlyStepsList
@@ -19,6 +26,19 @@ export default function StepsList() {
       ingredients={ingredients}
       recipeId={recipe?.id}
       recipeName={recipe?.name}
+      renderAfterStep={(step) =>
+        linkedByStep
+          .get(step)
+          ?.map((section) => (
+            <LinkedRecipeStepsSection
+              key={section.recipe.id}
+              enableTimers
+              interactive
+              ingredientsFor={ingredientsFor}
+              section={section}
+            />
+          ))
+      }
       steps={recipe?.steps ?? []}
       systemUsed={recipe?.systemUsed ?? "metric"}
     />
