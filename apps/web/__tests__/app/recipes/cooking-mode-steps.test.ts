@@ -193,4 +193,39 @@ describe("resolveCookingModeSteps with linked recipes", () => {
     // The recipe being cooked's own steps carry no linked origin at all.
     expect(steps[0]).not.toHaveProperty("linkedFrom");
   });
+
+  it("leaves out a step that only names the linked recipes following it", () => {
+    const sauceSteps = [{ step: "Simmer", systemUsed: "metric", order: 0 }];
+    const steps = [
+      { step: "Fry", systemUsed: "metric", order: 0 },
+      { step: "[Sauce](id:sauce)", systemUsed: "metric", order: 1 },
+      { step: "Serve", systemUsed: "metric", order: 2 },
+    ];
+    const resolved = resolveCookingModeSteps(
+      steps,
+      "metric",
+      (step) =>
+        step === steps[1]
+          ? [
+              {
+                recipeId: "sauce",
+                recipeName: "Sauce",
+                depth: 1,
+                systemUsed: "metric",
+                ingredients: [],
+                steps: sauceSteps,
+              },
+            ]
+          : [],
+      (step) => step === steps[1]
+    );
+
+    expect(
+      resolved.map((step) => [step.stepNumber, step.text, step.linkedFrom?.recipeName ?? null])
+    ).toEqual([
+      [1, "Fry", null],
+      [2, "Simmer", "Sauce"],
+      [3, "Serve", null],
+    ]);
+  });
 });

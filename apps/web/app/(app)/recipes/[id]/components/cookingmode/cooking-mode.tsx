@@ -5,7 +5,10 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRecipeLinkedRecipes } from "@/app/(app)/recipes/[id]/components/use-recipe-linked-recipes";
 import { useWakeLockContext } from "@/app/(app)/recipes/[id]/components/wake-lock-context";
-import { linkedSectionsByStep } from "@/components/recipes/linked-recipe-sections";
+import {
+  linkedSectionsByStep,
+  stepsReplacedByLinked,
+} from "@/components/recipes/linked-recipe-sections";
 import { TimerDock } from "@/components/timer-dock";
 import { useDevicePreference } from "@/context/device-preferences-context";
 import { useFloatingDock } from "@/hooks/use-floating-dock";
@@ -80,20 +83,26 @@ export default function CookingMode({
 
   const steps = useMemo(() => {
     // Every step that expands a linked recipe, the linked recipes' own included.
-    const linkedByStep = linkedSectionsByStep([
+    const nodes = [
       ...(tree?.steps ?? []),
       ...(tree?.sections ?? []).flatMap((section) => section.steps),
-    ]);
+    ];
+    const linkedByStep = linkedSectionsByStep(nodes);
+    const replaced = stepsReplacedByLinked(nodes);
 
-    return resolveCookingModeSteps(recipe.steps ?? [], recipe.systemUsed ?? "metric", (step) =>
-      (linkedByStep.get(step) ?? []).map((section): CookingModeLinkedSection => ({
-        recipeId: section.recipe.id,
-        recipeName: section.recipe.name,
-        depth: section.depth,
-        systemUsed: section.systemUsed,
-        ingredients: ingredientsFor(section.recipe),
-        steps: section.steps.map((node) => node.step),
-      }))
+    return resolveCookingModeSteps(
+      recipe.steps ?? [],
+      recipe.systemUsed ?? "metric",
+      (step) =>
+        (linkedByStep.get(step) ?? []).map((section): CookingModeLinkedSection => ({
+          recipeId: section.recipe.id,
+          recipeName: section.recipe.name,
+          depth: section.depth,
+          systemUsed: section.systemUsed,
+          ingredients: ingredientsFor(section.recipe),
+          steps: section.steps.map((node) => node.step),
+        })),
+      (step) => replaced.has(step)
     );
   }, [ingredientsFor, recipe.steps, recipe.systemUsed, tree]);
   const linkedIngredients = useMemo(

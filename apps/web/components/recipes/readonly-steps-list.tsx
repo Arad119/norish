@@ -50,6 +50,11 @@ export type ReadonlyStepsListProps = {
   units?: UnitsMap;
   /** Content shown right after a step, such as the linked recipes it expands. */
   renderAfterStep?: (step: StepLike) => React.ReactNode;
+  /**
+   * A step whose own row is left out, its `renderAfterStep` content standing
+   * in for it; it takes no number.
+   */
+  isStepHidden?: (step: StepLike) => boolean;
 };
 
 export function ReadonlyStepsList({
@@ -64,6 +69,7 @@ export function ReadonlyStepsList({
   InstructionComponent = SmartInstruction,
   units,
   renderAfterStep,
+  isStepHidden,
 }: ReadonlyStepsListProps) {
   const [done, setDone] = useState<Set<number>>(() => new Set());
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -127,6 +133,10 @@ export function ReadonlyStepsList({
               {afterStep}
             </li>
           ) : null;
+
+          if (isStepHidden?.(s)) {
+            return afterStepItem;
+          }
 
           if (isHeading) {
             const headingText = s.step.trim().replace(/^#+\s*/, "");

@@ -59,7 +59,10 @@ const PIZZA = recipe(
   [["mozzarella", 125]]
 );
 
-const state = vi.hoisted(() => ({ currentServings: 2 }));
+const state = vi.hoisted(() => ({ currentServings: 2, root: null as unknown }));
+
+/** The recipe being cooked: the Margherita unless a test picks another. */
+const cooked = () => (state.root as FullRecipeDTO | null) ?? PIZZA;
 
 // The dialog shows what cooking mode hands it: the steps in order, with the
 // recipe each comes from, and the linked lines with their ticks.
@@ -117,15 +120,15 @@ vi.mock("@/app/(app)/recipes/[id]/context", () => ({
   useRecipeContextRequired: () => ({
     adjustedIngredients: [],
     currentServings: state.currentServings,
-    recipe: PIZZA,
+    recipe: cooked(),
   }),
 }));
 vi.mock("@/app/(app)/recipes/[id]/components/use-recipe-linked-recipes", () => ({
   useRecipeLinkedRecipes: () => {
-    const scale = linkedRecipeScaleFactor(PIZZA.servings, state.currentServings);
+    const scale = linkedRecipeScaleFactor(cooked().servings, state.currentServings);
 
     return {
-      tree: expandLinkedRecipes(PIZZA, new Map([[DOUGH.id, DOUGH]]), { systemUsed: "metric" }),
+      tree: expandLinkedRecipes(cooked(), new Map([[DOUGH.id, DOUGH]]), { systemUsed: "metric" }),
       ingredientsFor: (linked: FullRecipeDTO) =>
         scaleIngredientAmounts(linked.recipeIngredients, scale),
     };
@@ -204,6 +207,7 @@ vi.mock("@/hooks/use-unit-formatter", () => ({
 
 beforeEach(() => {
   state.currentServings = 2;
+  state.root = null;
 });
 
 function openCooking() {
@@ -224,6 +228,22 @@ describe("Cooking mode with linked recipes", () => {
       "Pizza Dough | Mixing | Mix",
       "Pizza Dough | Mixing | Knead",
       "- | - | Bake",
+    ]);
+  });
+
+  it("leaves out a step that only names the linked recipe, cooking its steps instead", () => {
+    state.root = recipe("calzone-1", "Calzone", ["[Pizza Dough](id:dough-1)", "Fold and bake"]);
+    render(<CookingMode />);
+    openCooking();
+
+    expect(
+      within(screen.getByRole("list", { name: "steps" }))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent)
+    ).toEqual([
+      "Pizza Dough | Mixing | Mix",
+      "Pizza Dough | Mixing | Knead",
+      "- | - | Fold and bake",
     ]);
   });
 

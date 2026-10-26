@@ -4,6 +4,7 @@ import type { LinkableRecipe } from "@norish/shared/lib/linked-recipes";
 import {
   expandLinkedRecipes,
   extractLinkedRecipeIds,
+  isOnlyRecipeLinks,
   linkedRecipeScaleFactor,
   MAX_LINKED_RECIPE_DEPTH,
   scaleIngredientAmounts,
@@ -246,6 +247,81 @@ describe("expandLinkedRecipes", () => {
       requestedIds: [],
     });
     expect(expandLinkedRecipes(empty, byId(), { systemUsed: "metric" }).steps).toEqual([]);
+  });
+});
+
+describe("isOnlyRecipeLinks", () => {
+  it("is true for a text of links, whitespace and punctuation only", () => {
+    expect(isOnlyRecipeLinks(link(DOUGH))).toBe(true);
+    expect(isOnlyRecipeLinks(`  ${link(DOUGH)}.  `)).toBe(true);
+    expect(isOnlyRecipeLinks(`${link(DOUGH)}, ${link(SAUCE)}`)).toBe(true);
+  });
+
+  it("is false once the text has words of its own, or no recipe link", () => {
+    expect(isOnlyRecipeLinks(`Make the ${link(DOUGH)}`)).toBe(false);
+    expect(isOnlyRecipeLinks(`${link(DOUGH)} and ${link(SAUCE)}`)).toBe(false);
+    expect(isOnlyRecipeLinks("[a video](https://example.com)")).toBe(false);
+    expect(isOnlyRecipeLinks("")).toBe(false);
+    expect(isOnlyRecipeLinks(null)).toBe(false);
+  });
+
+  it("gives the same answer however often it is asked", () => {
+    expect([1, 2, 3].map(() => isOnlyRecipeLinks(link(DOUGH)))).toEqual([true, true, true]);
+  });
+});
+
+describe("steps replaced by the linked recipes they name", () => {
+  const replacedSteps = (root: Recipe, ...loaded: Recipe[]) =>
+    expandLinkedRecipes(root, byId(...loaded), { systemUsed: "metric" })
+      .steps.filter((node) => node.replacedByLinked)
+      .map((node) => node.step.step);
+
+  it("marks a step that is only the link to a recipe expanding after it", () => {
+    const pizza = recipe("pizza-1", "Pizza", [link(DOUGH), "Bake"]);
+
+    expect(replacedSteps(pizza, DOUGH)).toEqual([link(DOUGH)]);
+  });
+
+  it("marks a step of several links when every one expands after it", () => {
+    const pizza = recipe("pizza-1", "Pizza", [`${link(DOUGH)}, ${link(SAUCE)}`]);
+
+    expect(replacedSteps(pizza, DOUGH, SAUCE)).toHaveLength(1);
+    // One of the two not loaded: the step is all the reader has of it.
+    expect(replacedSteps(pizza, DOUGH)).toEqual([]);
+  });
+
+  it("keeps a step with words of its own", () => {
+    const pizza = recipe("pizza-1", "Pizza", [`Make the ${link(DOUGH)} and let it rest`]);
+
+    expect(replacedSteps(pizza, DOUGH)).toEqual([]);
+  });
+
+  it("keeps the link while its recipe is not available", () => {
+    const pizza = recipe("pizza-1", "Pizza", [link(DOUGH)]);
+
+    expect(replacedSteps(pizza)).toEqual([]);
+  });
+
+  it("keeps a later link to a recipe that expanded earlier", () => {
+    const pizza = recipe("pizza-1", "Pizza", [link(DOUGH), link(DOUGH)]);
+    const tree = expandLinkedRecipes(pizza, byId(DOUGH), { systemUsed: "metric" });
+
+    expect(tree.steps.map((node) => node.replacedByLinked)).toEqual([true, false]);
+  });
+
+  it("keeps a heading row that names a recipe", () => {
+    const pizza = recipe("pizza-1", "Pizza", [`# ${link(DOUGH)}`]);
+
+    expect(replacedSteps(pizza, DOUGH)).toEqual([]);
+  });
+
+  it("marks link-only steps inside a linked recipe too", () => {
+    const starter = recipe("starter-1", "Starter", ["Feed it"]);
+    const dough = recipe("dough-2", "Dough", [link(starter), "Knead"]);
+    const pizza = recipe("pizza-1", "Pizza", [link(dough)]);
+    const tree = expandLinkedRecipes(pizza, byId(starter, dough), { systemUsed: "metric" });
+
+    expect(tree.sections[0]?.steps.map((node) => node.replacedByLinked)).toEqual([true, false]);
   });
 });
 

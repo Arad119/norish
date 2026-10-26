@@ -91,11 +91,13 @@ const LOADED = new Map([DOUGH, SAUCE, STARTER].map((r) => [r.id, r]));
 const context = vi.hoisted(() => ({
   currentServings: 4,
   loaded: new Map<string, unknown>(),
+  /** The recipe being read, when not the Margherita. */
+  root: null as unknown,
 }));
 
 vi.mock("@/app/(app)/recipes/[id]/context", () => {
   const value = () => ({
-    recipe: PIZZA,
+    recipe: (context.root as FullRecipeDTO | null) ?? PIZZA,
     adjustedIngredients: [],
     currentServings: context.currentServings,
   });
@@ -133,6 +135,7 @@ vi.mock("next-intl", () => ({
 beforeEach(() => {
   context.currentServings = 4;
   context.loaded = LOADED;
+  context.root = null;
 });
 
 /** The text of every step on screen, in reading order. */
@@ -292,5 +295,78 @@ describe("Recipe page ingredients with linked recipes", () => {
     render(<IngredientsList />);
 
     expect(screen.queryByTestId("linked-recipe-ingredients")).not.toBeInTheDocument();
+  });
+});
+
+describe("Recipe page steps that only name a linked recipe", () => {
+  // A dough whose first step only names its starter, so the nested case is
+  // covered with the same rule.
+  const STARTER_DOUGH = recipe("dough-2", "Starter Dough", [
+    "[Sourdough Starter](id:starter-1)",
+    "Knead it",
+  ]);
+  const FRIES = recipe("fries-1", "Truffle Fries", [
+    "Fry the potatoes",
+    "Toss with salt",
+    "[Tomato Sauce](id:sauce-1)",
+    {
+      step: "[Starter Dough](id:dough-2).",
+      systemUsed: "metric",
+      order: 3,
+      stepIngredients: [{ ingredientOrder: 0, share: 1, order: 0 }],
+    },
+    "[Pizza Dough](id:dough-1)",
+    "Serve hot",
+  ]);
+
+  beforeEach(() => {
+    context.root = FRIES;
+    context.loaded = new Map([DOUGH, SAUCE, STARTER, STARTER_DOUGH].map((r) => [r.id, r]));
+  });
+
+  it("leaves out the step, its section's header standing in for it", () => {
+    const { container } = render(<StepsList />);
+
+    expect(stepTexts(container)).not.toContain("[Tomato Sauce](id:sauce-1)");
+    expect(stepTexts(container)).not.toContain("[Pizza Dough](id:dough-1)");
+
+    const sauce = screen
+      .getAllByTestId("linked-recipe-steps")
+      .find((section) => section.getAttribute("data-linked-recipe-id") === "sauce-1")!;
+
+    expect(within(sauce).getByRole("link", { name: "Tomato Sauce" })).toBeInTheDocument();
+    expect(within(sauce).getByText("Simmer the tomatoes")).toBeInTheDocument();
+  });
+
+  it("numbers the recipe's own steps without it", () => {
+    render(<StepsList />);
+
+    const serve = screen.getByText("Serve hot").closest("[role='button']")!;
+
+    // Fry 1, Toss 2, the dough step kept for its chip 3, Serve 4.
+    expect(serve).toHaveTextContent(/^4/);
+  });
+
+  it("keeps a link-only step that carries ingredient chips of its own", () => {
+    const { container } = render(<StepsList />);
+
+    expect(stepTexts(container)).toContain("[Starter Dough](id:dough-2).");
+  });
+
+  it("leaves out such a step inside a linked recipe too", () => {
+    const { container } = render(<StepsList />);
+
+    expect(stepTexts(container)).not.toContain("[Sourdough Starter](id:starter-1)");
+    expect(screen.getByText("Feed the starter the night before")).toBeInTheDocument();
+    expect(screen.getByText("Knead it")).toBeInTheDocument();
+  });
+
+  it("shows the step while its recipe is not available", () => {
+    context.loaded = new Map();
+
+    const { container } = render(<StepsList />);
+
+    expect(stepTexts(container)).toContain("[Tomato Sauce](id:sauce-1)");
+    expect(screen.queryByTestId("linked-recipe-steps")).not.toBeInTheDocument();
   });
 });

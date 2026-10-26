@@ -77,6 +77,10 @@ adds them as well.
 
 A few rules keep this readable:
 
+- A step that is nothing but the link, like `/Garlic Aioli` on its own, is
+  replaced by the linked recipe's section rather than shown as a step of its
+  own. A step with other words, like "Make the /Pizza Dough and let it rest",
+  stays.
 - A recipe linked twice shows its steps only at the first link. Later links
   stay plain links.
 - A linked recipe that links another shows that one inside it, up to three

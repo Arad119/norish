@@ -4,6 +4,7 @@ import { useRecipeLinkedRecipes } from "@/app/(app)/recipes/[id]/components/use-
 import {
   LinkedRecipeStepsSection,
   linkedSectionsByStep,
+  stepsReplacedByLinked,
 } from "@/components/recipes/linked-recipe-sections";
 import { ReadonlyStepsList } from "@/components/recipes/readonly-steps-list";
 
@@ -18,12 +19,14 @@ export default function StepsList() {
       : (recipe?.recipeIngredients ?? []);
   const { tree, ingredientsFor } = useRecipeLinkedRecipes();
   const linkedByStep = linkedSectionsByStep(tree?.steps ?? []);
+  const replaced = stepsReplacedByLinked(tree?.steps ?? []);
 
   return (
     <ReadonlyStepsList
       enableTimers
       interactive
       ingredients={ingredients}
+      isStepHidden={(step) => replaced.has(step)}
       recipeId={recipe?.id}
       recipeName={recipe?.name}
       renderAfterStep={(step) =>

@@ -23,6 +23,24 @@ export function linkedSectionsByStep(nodes: LinkedStepNode[]): Map<object, Linke
   );
 }
 
+/**
+ * The steps that only name the linked recipes expanding after them: their
+ * sections' headers already say it, so the step is not shown on its own. A
+ * step carrying images or ingredient chips of its own is kept for those.
+ */
+export function stepsReplacedByLinked(nodes: LinkedStepNode[]): Set<object> {
+  return new Set(
+    nodes
+      .filter(
+        (node) =>
+          node.replacedByLinked &&
+          (node.step.images?.length ?? 0) === 0 &&
+          (node.step.stepIngredients?.length ?? 0) === 0
+      )
+      .map((node) => node.step)
+  );
+}
+
 function LinkedRecipeHeader({
   recipe,
   children,
@@ -76,6 +94,7 @@ export function LinkedRecipeStepsSection({
   const [isExpanded, setIsExpanded] = useState(true);
   const { recipe } = section;
   const nested = linkedSectionsByStep(section.steps);
+  const replaced = stepsReplacedByLinked(section.steps);
   const stepsId = `linked-recipe-steps-${recipe.id}`;
 
   return (
@@ -111,6 +130,7 @@ export function LinkedRecipeStepsSection({
               enableTimers={enableTimers}
               ingredients={ingredientsFor(recipe)}
               interactive={interactive}
+              isStepHidden={(step) => replaced.has(step)}
               recipeId={recipe.id}
               recipeName={recipe.name}
               renderAfterStep={(step) =>

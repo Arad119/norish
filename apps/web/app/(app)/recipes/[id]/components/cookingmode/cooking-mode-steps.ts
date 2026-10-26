@@ -51,12 +51,15 @@ export type ResolvedCookingModeStep = {
  * Cooking mode's steps, in cooking order: headings fold onto the steps under
  * them, and each linked recipe's steps follow the step that links it, so
  * making the dough is part of making the pizza. `linkedAfter` names the
- * linked recipes that expand after a step, at any depth.
+ * linked recipes that expand after a step, at any depth; `isReplaced` names a
+ * step that only names them, which is left out for the linked steps that
+ * follow it.
  */
 export function resolveCookingModeSteps(
   steps: CookingModeStepLike[],
   systemUsed: string,
-  linkedAfter?: (step: CookingModeStepLike) => CookingModeLinkedSection[]
+  linkedAfter?: (step: CookingModeStepLike) => CookingModeLinkedSection[],
+  isReplaced?: (step: CookingModeStepLike) => boolean
 ): ResolvedCookingModeStep[] {
   const resolved: ResolvedCookingModeStep[] = [];
 
@@ -81,7 +84,7 @@ export function resolveCookingModeSteps(
       if (text.startsWith("#")) {
         heading = text.replace(/^#+\s*/, "");
         pendingHeadingImages = images;
-      } else {
+      } else if (!isReplaced?.(step)) {
         resolved.push({
           originalIndex,
           stepNumber: resolved.length + 1,

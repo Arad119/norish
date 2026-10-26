@@ -53,6 +53,13 @@ export interface LinkedRecipeStepNode<
 > {
   step: TStep;
   linked: LinkedRecipeSection<TRecipe, TStep>[];
+  /**
+   * The step says nothing but the links that expand right after it ("[Garlic
+   * Aioli]"), so the sections' headers say all it did and it need not be
+   * shown on its own. A step with words of its own ("Make the [Dough] and let
+   * it rest") is always kept.
+   */
+  replacedByLinked: boolean;
 }
 
 export interface LinkedRecipeTree<
@@ -76,6 +83,16 @@ export interface ExpandLinkedRecipesOptions {
   /** The system the recipe being read is shown in; linked recipes prefer it too. */
   systemUsed: string;
   maxDepth?: number;
+}
+
+/**
+ * Whether a text is only recipe links: nothing left once the links,
+ * whitespace and punctuation are taken out.
+ */
+export function isOnlyRecipeLinks(text: string | null | undefined): boolean {
+  if (!text || extractLinkedRecipeIds(text).length === 0) return false;
+
+  return text.replace(RECIPE_LINK_PATTERN, "").replace(/[\s\p{P}]/gu, "") === "";
 }
 
 /** The recipe ids a text links, once each, in the order they appear. */
@@ -172,7 +189,16 @@ export function expandLinkedRecipes<
         }
       }
 
-      return { step, linked };
+      const text = step.step.trim();
+      const replacedByLinked =
+        linked.length > 0 &&
+        !text.startsWith("#") &&
+        isOnlyRecipeLinks(text) &&
+        extractLinkedRecipeIds(text).every((id) =>
+          linked.some((section) => section.recipe.id === id)
+        );
+
+      return { step, linked, replacedByLinked };
     });
 
   const steps = expandSteps(sortedStepsInSystem(root.steps ?? [], systemUsed), 0);

@@ -63,7 +63,7 @@ function recipeInput(
 let stack: AIE2EStack;
 let context: BrowserContext;
 let page: Page;
-const ids = { starter: "", dough: "", sauce: "", pizza: "" };
+const ids = { starter: "", dough: "", sauce: "", pizza: "", fries: "" };
 
 async function createRecipe(input: ReturnType<typeof recipeInput>): Promise<string> {
   const id = await callTrpc<string>(stack.baseURL, stack.ownerCookies, "recipes.create", input);
@@ -150,6 +150,20 @@ test.beforeAll(async ({ aiStack, browser }) => {
         { step: `Spread the ${link("San Marzano Sauce", ids.sauce)}.` },
         { step: `Stretch the ${link("Neapolitan Dough", ids.dough)} into rounds.` },
         { step: "Tear the cheese over and bake." },
+      ]
+    )
+  );
+
+  ids.fries = await createRecipe(
+    recipeInput(
+      "Loaded Fries",
+      2,
+      [["potatoes", 500, "g"]],
+      [
+        { step: "Fry the potatoes until golden." },
+        // Nothing but the link: the linked section stands in for it.
+        { step: link("San Marzano Sauce", ids.sauce) },
+        { step: "Serve hot." },
       ]
     )
   );
@@ -334,6 +348,38 @@ test("Add to groceries offers the linked recipes' lines with the recipe's own", 
 
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
+});
+
+test("a step that only names a linked recipe gives way to its section", async () => {
+  await page.goto(`/recipes/${ids.fries}`);
+
+  const steps = stepsCard();
+  const sauce = steps.getByTestId("linked-recipe-steps");
+
+  await expect(sauce).toHaveCount(1);
+  await expect(sauce.getByRole("link", { name: "San Marzano Sauce" })).toBeVisible();
+  await expect(sauce.getByText("Crush the tomatoes by hand.")).toBeVisible();
+  // The only link to the sauce is the section's own header.
+  await expect(steps.getByRole("link", { name: "San Marzano Sauce" })).toHaveCount(1);
+  // The recipe's own steps number on without it: Fry 1, Serve 2.
+  await expect(steps.getByRole("button", { name: /^2 Serve hot\./ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Cook", exact: true }).locator("visible=true").click();
+
+  const dialog = page.getByRole("dialog");
+
+  // Fry, the sauce's one step, Serve: no slide for the bare link.
+  await expect(dialog.getByText("1 / 3")).toBeVisible();
+  await dialog.getByRole("button", { name: "Next step" }).click();
+  await expect(dialog.locator(".can-scroll-natively")).toContainText("Crush the tomatoes by hand.");
+  await expect(
+    dialog.locator(".can-scroll-natively").getByTestId("cooking-step-linked-from")
+  ).toHaveText("From San Marzano Sauce");
+  await dialog.getByRole("button", { name: "Next step" }).click();
+  await expect(dialog.locator(".can-scroll-natively")).toContainText("Serve hot.");
+
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await page.goto(`/recipes/${ids.pizza}`);
 });
 
 test("a linked recipe's header takes the reader to it", async () => {
